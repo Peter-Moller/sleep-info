@@ -1,7 +1,7 @@
 # sleep-info
 A bash script for OS X that details information about sleep: why, why not, when and what's preventing sleep
 
-![Screendump of sleep_info](http://fileadmin.cs.lth.se/cs/Personal/Peter_Moller/scripts/bilder/sleep_info_2015-01-18.png)
+![Screendump of sleep_info](http://fileadmin.cs.lth.se/cs/Personal/Peter_Moller/scripts/bilder/sleep_info 2015-10-14.png)
 
 More information about the script can be found here:
 http://cs.lth.se/peter-moller/script/sleep-info-en/
