@@ -16,17 +16,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-# Last change: 2015-01-18
-# Requires OS X 10.10
-# Version: 2.5
+# Last change:
+# 2015-01-18  Requires OS X 10.10
+# 2025-05-28  Moved to macOS 15.5. Sorry: will not deal with older OS:es... 😕
 
-
-# Good source of information
-# https://developer.apple.com/library/Mac/documentation/IOKit/Reference/IOPMLib_header_reference/index.html
- # (IOPMLib provides access to common power management facilities, like initiating system sleep, getting 
- # current idle timer values, registering for sleep/wake notifications, and preventing system sleep)
-
-function usage()
+usage()
 {
 cat << EOF
 Usage: $0 options
@@ -40,14 +34,10 @@ OPTIONS:
 EOF
 }
 
-fetch_new=f
-PMSET="/tmp/pmset.txt"
 TempFile1="/tmp/sleep_info_temp1.txt"
 TempFile2="/tmp/sleep_info_temp2.txt"
 TempFile3="/tmp/sleep_info_temp3.txt"
-SysLogTemp="/tmp/syslog_temp"
 short="f"
-VER="2.5"
 
 while getopts "hus" OPTION
 do
@@ -60,114 +50,6 @@ do
             exit;;
     esac
 done
-
-
-# Find where the script resides (so updates update the correct version) -- without trailing slash
-DirName="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-# What is the name of the script? (without any PATH)
-ScriptName="$(basename $0)"
-# Is the file writable?
-if [ -w "${DirName}"/"${ScriptName}" ]; then
-  Writable="yes"
-else
-  Writable="no"
-fi
-# Who owns the script?
-ScriptOwner="$(ls -ls ${DirName}/${ScriptName} | awk '{print $4":"$5}')"
-
-# Find out which system version we are running
-SW_VERS="$(sw_vers -productName) $(sw_vers -productVersion)"
-ComputerName="$(networksetup -getcomputername)"
-
-# Find out if it's a server
-# First step: does the name fromsw_vers include "server"?
-if [ -z "$(echo "$SW_VERS" | grep -i server)" ]; then
-  # If not, it may still be a server. Beginning with OS X 10.8 all versions include the command serverinfo:
-  serverinfo --software 1>/dev/null
-  # Exit code 0 = server; 1 = NOT server
-  ServSoft=$?
-  if [ $ServSoft -eq 0 ]; then
-    # Is it configured?
-    serverinfo --configured 1>/dev/null
-    ServConfigured=$?
-    if [ $ServConfigured -eq 0 ]; then
-      SW_VERS="$SW_VERS ($(serverinfo --productname) $(serverinfo --shortversion))"
-    else
-      SW_VERS="$SW_VERS ($(serverinfo --productname) $(serverinfo --shortversion) - unconfigured)"
-    fi
-  fi
-fi
-
-
-# Update [and quit]
-# Check for update
-function CheckForUpdate() {
-  NewScriptAvailable=f
-  # First, download the script from the server
-  /usr/bin/curl -s -f -e "$ScriptName ver:$VER" -o /tmp/"$ScriptName" http://fileadmin.cs.lth.se/cs/Personal/Peter_Moller/scripts/"$ScriptName" 2>/dev/null
-  /usr/bin/curl -s -f -e "$ScriptName ver:$VER" -o /tmp/"$ScriptName".sha1 http://fileadmin.cs.lth.se/cs/Personal/Peter_Moller/scripts/"$ScriptName".sha1 2>/dev/null
-  ERR=$?
-  # Find, and print, errors from curl (we assume both curl's above generate the same errors, if any)
-  if [ "$ERR" -ne 0 ] ; then
-  	# Get the appropriate error message from the curl man-page
-  	# Start with '       43     Internal error. A function was called with a bad parameter.'
-  	# end get it down to: ' 43: Internal error.'
-  	ErrorMessage="$(MANWIDTH=500 man curl | egrep -o "^\ *${ERR}\ \ *[^.]*." | perl -pe 's/[0-9](?=\ )/$&:/;s/  */ /g')"
-    echo $ErrorMessage
-    echo "The file \"$ScriptName\" could not be fetched from \"http://fileadmin.cs.lth.se/cs/Personal/Peter_Moller/scripts/$ScriptName\""
-  fi
-  # See if the downloaded script checks out 
-  # Compare the checksum of the script with the fetched sha1-sum
-  # If they diff, something went wrong in the download
-  # Then, check if the downloaded script differs from the current
-  if [ "$(openssl sha1 /tmp/"$ScriptName" | awk '{ print $2 }')" = "$(less /tmp/"$ScriptName".sha1)" ]; then
-    if [ -n "$(diff /tmp/"$ScriptName" "$DirName"/"$ScriptName" 2> /dev/null)" ] ; then
-      NewScriptAvailable=t
-    fi
-  else
-    CheckSumError=t
-  fi
-  }
-
-
-# Update [and quit]
-function UpdateScript() {
-  CheckForUpdate
-  if [ "$CheckSumError" = "t" ]; then
-    echo "Checksum of the fetched \"$ScriptName\" does NOT check out. Look into this! No update performed!"
-    exit 1
-  fi
-  # If new script available, update
-  if [ "$NewScriptAvailable" = "t" ]; then
-    # But only if the script is writable!
-    if [ "$Writable" = "yes" ]; then
-      /bin/rm -f "$DirName"/"$ScriptName" 2> /dev/null
-      /bin/mv /tmp/"$ScriptName" "$DirName"/"$ScriptName"
-      chmod 755 "$DirName"/"$ScriptName"
-      /bin/rm /tmp/"$ScriptName".sha1 2>/dev/null
-      echo "A new version of \"$ScriptName\" was installed successfully!"
-      echo "Script updated. Exiting"
-
-      # Send a signal that someone has updated the script
-      # This is only to give me feedback that someone is actually using this. I will *not* use the data in any way nor give it away or sell it!
-      /usr/bin/curl -s -f -e "$ScriptName ver:$VER" -o /dev/null http://fileadmin.cs.lth.se/cs/Personal/Peter_Moller/scripts/updated 2>/dev/null
-      exit 0
-    else
-      echo "Script cannot be updated!"
-      echo "It is located in \"$DirName\" and is owned by \"$ScriptOwner\""
-      echo "You need to sort this out yourself!!"
-      echo "Exiting..."
-      exit 1
-    fi
-  else
-    echo "You already have the latest version of \"$ScriptName\"!"
-    exit 0
-  fi
-  }
-
-
-# First: see if we should update the script
-[[ "$fetch_new" = "t" ]] && UpdateScript
 
 
 # (Colors can be found at http://en.wikipedia.org/wiki/ANSI_escape_code, http://graphcomp.com/info/specs/ansi_col.html and other sites)
@@ -196,278 +78,274 @@ BGColor="$RES"
 Face="$RES"
 FontColor="$RES"
 
-# Print a warning if you run older than 10.10
-if [ $(sw_vers -productVersion | cut -d\. -f2) -lt 10 ]; then
-	printf "${ESC}${BlackBack};${YellowFont}mThis script is written for OS X 10.10. Beware that it may not work correctly on your system${Reset}\n"
-	echo
+# Print a warning if you run older than 15
+if [ $(sw_vers -productVersion | cut -d\. -f1) -lt 15 ]; then
+    printf "${ESC}${BlackBack};${YellowFont}mThis script is written for macOS ≥ 15. Beware that it may not work correctly on your system${Reset}\n"
+    echo
 fi
 
-pmset -g assertions > "$PMSET"
-chmod 666 "$PMSET"
+# Find where the script resides (correct version)
+# Get the DirName and ScriptName
+if [ -L "${BASH_SOURCE[0]}" ]; then
+    # Get the *real* directory of the script
+    ScriptDirName="$(dirname "$(readlink "${BASH_SOURCE[0]}")")"   # ScriptDirName='/usr/local/bin'
+    # Get the *real* name of the script
+    ScriptName="$(basename "$(readlink "${BASH_SOURCE[0]}")")"     # ScriptName='moodle_backup.sh'
+else
+    ScriptDirName="$(dirname "${BASH_SOURCE[0]}")"
+    # What is the name of the script?
+    ScriptName="$(basename "${BASH_SOURCE[0]}")"
+fi
+ScriptFullName="${ScriptDirName}/${ScriptName}"
+
+PMSET_ASSERTIONS="$(pmset -g assertions)"
+PMSET_G="$(pmset -g)"
+SW_VERS="$(sw_vers --productName) $(sw_vers --productVersion)"
+MODEL_IDENTIFIER="$(system_profiler SPHardwareDataType | grep "Model Identifier" | awk '{print $NF}' )"                # Ex: MODEL_IDENTIFIER=MacBookPro18,3
+MODEL_IDENTIFIER_NAME="$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $1}')"    # Ex: MODEL_IDENTIFIER_NAME='MacBook Pro (14-inch, 2021)'
+MODEL_IDENTIFIER_URL="https:$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $4}')"     # Ex: MODEL_IDENTIFIER_URL=https://support.apple.com/kb/SP854
+
 
 # Find out if we are running on 'AC Power' och 'Battery Power'
-PowerKind="$(pmset -g ps | awk -F\' '{print $2}')"
+PMSET_PS="$(pmset -g ps)"
+# Ex, laptop:
+# PMSET_PS='Now drawing from '\''Battery Power'\''
+#            -InternalBattery-0 (id=24117347)   91%; discharging; 5:57 remaining present: true'
+# Ex, Mac mini:
+# PMSET_PS='Now drawing from '\''AC Power'\'''
+PowerKind="$(echo "$PMSET_PS" | awk -F\' '{print $2}')"                                                      # Ex: PowerKind='AC Power' or PowerKind='Battery Power'
 # If we are on battery, also report status
-if [ -n "$(pmset -g batt | egrep -o [0-9]*%.*charg.*$)" ]; then
-	BatteryPowerText=" ($(pmset -g batt | egrep -o [0-9]*%.*charg.*$))"
-	# Example: '99%; discharging; 4:38 remaining'
+if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ]; then
+    BatteryCycles="$(pmset -g rawbatt | grep -Eo "Cycles=[^;]*")"                                            # Ex: BatteryCycles=Cycles=184/1000
+    BatteryDetailsText="Battery at $(pmset -g batt | grep -Eo "[0-9]*%.*remaining*|[0-9]*%.*discharging|[0-9]*%.*finishing charge"); $BatteryCycles"        # Ex: BatteryDetailsText='Battery at 89%; discharging; 6:05 remaining present: true); Cycles=184/1000'
 fi
-PowerKind="${PowerKind}${BatteryPowerText}"
+# If we are on A) battery and B) external powersupply, get some details
+if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ] && [ "$PowerKind" = "AC Power" ]; then
+    PMSET_ADAPTER="$(pmset -g adapter)"
+    # Ex: PMSET_ADAPTER=' Wattage = 5W
+    #      Current = 1000mA
+    #      Voltage = 5000mV
+    #      AdapterID = 2
+    #      Family Code = 0xe0004008'
+    AdapterDetails="$(echo "$PMSET_ADAPTER" | grep Wattage | awk '{print $NF}'), $(echo "$PMSET_ADAPTER" | grep Voltage | awk '{print $NF}'), $(echo "$PMSET_ADAPTER" | grep Current | awk '{print $NF}')"
+    # Ex: AdapterDetails='5W, 5000mV, 1000mA'
+fi
 
+
+
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+#   _____   _____    ___   ______   _____       _____  ______      ______   _   _   _   _   _____   _____   _____   _____   _   _   _____ 
+#  /  ___| |_   _|  / _ \  | ___ \ |_   _|     |  _  | |  ___|     |  ___| | | | | | \ | | /  __ \ |_   _| |_   _| |  _  | | \ | | /  ___|
+#  \ `--.    | |   / /_\ \ | |_/ /   | |       | | | | | |_        | |_    | | | | |  \| | | /  \/   | |     | |   | | | | |  \| | \ `--. 
+#   `--. \   | |   |  _  | |    /    | |       | | | | |  _|       |  _|   | | | | | . ` | | |       | |     | |   | | | | | . ` |  `--. \
+#  /\__/ /   | |   | | | | | |\ \    | |       \ \_/ / | |         | |     | |_| | | |\  | | \__/\   | |    _| |_  \ \_/ / | |\  | /\__/ /
+#  \____/    \_/   \_| |_/ \_| \_|   \_/        \___/  \_|         \_|      \___/  \_| \_/  \____/   \_/    \___/   \___/  \_| \_/ \____/ 
+
+
+# Get the sleep / wake data. Takes just a few seconds, so should be ok
+sleep_wake_history() {
+    SleepWakeHistory="$(pmset -g log | grep -E "Entering Sleep state due to |Wake from Deep Idle " | grep -Ev "Maintenance Sleep|Sleep Service Back to Sleep|DarkWake from Deep Idle" | tail -10)"
+    # Ex: SleepWakeHistory='2025-05-30 17:39:28 +0200 Sleep                 Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:71%) 207 secs  
+    #                       2025-05-30 20:48:06 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 trackpadkeyboard SMC.OutboxNotEmpty/HID Activity Using BATT (Charge:70%)           
+    #                       2025-05-31 09:52:51 +0200 Sleep                 Entering Sleep state due to 'Software Sleep pid=16433':TCPKeepAlive=active Using AC (Charge:99%) 2 secs    
+    #                       2025-05-31 09:55:00 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to NUB.SPMISw3IRQ nub-spmi0.0x02 rtc/HID Activity Using AC (Charge:99%)           
+    #                       2025-05-31 13:37:51 +0200 Sleep                 Entering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:84%) 295 secs  
+    #                       2025-05-31 16:06:30 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 lid SMC.OutboxNotEmpty/HID Activity Using BATT (Charge:83%)           
+    #                       2025-05-31 17:23:29 +0200 Sleep                 Entering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:100%) 10 secs   
+    #                       2025-05-31 17:23:53 +0200 Wake                  DarkWake to FullWake from Deep Idle [CDNVAP] : due to Notification Using AC (Charge:100%)           
+    #                       2025-05-31 23:14:05 +0200 Sleep                 Entering Sleep state due to 'Software Sleep pid=429':TCPKeepAlive=active Using AC (Charge:100%) 7 secs    
+    #                       2025-06-01 09:13:01 +0200 Wake                  DarkWake to FullWake from Deep Idle [CDNVA] : due to UserActivity Assertion Using AC (Charge:100%)           '
+}
 
 # Find out why it did fall asleep before
-function WhyDidItFallAsleep()
+WhyDidItFallAsleep()
 {
-	PreviousSleepLine="$(/usr/bin/grep ": System Sleep " $SysLogTemp | tail -1)"
-	# PreviousSleepLine='Dec  6 22:21:17 Peters-iMac kernel[0] <Notice>: ARPT: 11790.119234: AirPort_Brcm43xx::powerChange: System Sleep '
-	#                     1   2     3         4         5          6       7         8                    9                   10     11
-	# Jan  9 23:18:44 Magnus-Anderssons-MacBook-Pro kernel[0] <Debug>: Previous Sleep Cause: 0
-	PreviousSleepCause="$(/usr/bin/grep -i "Previous Sleep Cause" $SysLogTemp | tail -1 | awk '{print $NF}')"
-	PreviousSleepTime="$(echo $PreviousSleepLine | awk '{print $1" "$2" "$3}')"
+    # Sleep reasons (according to CoPilot, 2025-05-30):
+    # 
+    # Sleep Reason         Description
+    # -----------------------------------------------------------------
+    # Idle Sleep           No user or system activity for a while
+    # Clamshell Sleep      Lid closed without external display/input
+    # Software Sleep       Manual sleep via Apple menu or power button
+    # Power Button Sleep   Triggered by pressing the power button
+    # Low Power            Sleep Battery critically low
+    # Sleep Timer Expired  System-initiated sleep after a timer
 
-	case $PreviousSleepCause in
-		1)  PreviousSleepReason="Clamshell Sleep (kIOPMClamshellSleepKey)";;
-		2)  PreviousSleepReason="Power Button Sleep (kIOPMPowerButtonSleepKey)";;
-		3)  PreviousSleepReason="Software Sleep (kIOPMSoftwareSleepKey)";;
-		4)  PreviousSleepReason="OS Switch Sleep (kIOPMOSSwitchHibernationKey)";;
-		5)  PreviousSleepReason="Idle Sleep (kIOPMIdleSleepKey)";;
-		6)  PreviousSleepReason="Low Power Sleep (kIOPMLowPowerSleepKey)";;
-		7)  PreviousSleepReason="Thermal Emergency Sleep (kIOPMThermalEmergencySleepKey)";;
-		8)  PreviousSleepReason="Maintenance Sleep (kIOPMMaintenanceSleepKey)";;
-		*)  PreviousSleepReason="Unknown"
-	esac
+    PreviousSleepLine="$(echo "$SleepWakeHistory" | grep "Entering Sleep state due to" | tail -1)"
+    # 2025-05-30 17:39:28 +0200 Sleep                 Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:71%) 207 secs 
+    PreviousSleepCause="$(echo "$PreviousSleepLine" | cut -d\' -f2)"                   # Ex: PreviousSleepCause='Idle Sleep'
+    PreviousSleepTime="$(echo $PreviousSleepLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/")"        # Ex: PreviousSleepTime='2025-05-30 17:39:28 +0200'
 }
 
 # Find out why it did wake
-function WhyDidItWake()
+WhyDidItWake()
 {
-	################################################
-	### Find out why the computer woke up
-	################################################
-	WakeLine="$(/usr/bin/grep -i ">: Wake reason" $SysLogTemp | tail -1)"
-	# Example of wake:
-	# Jan 12 17:02:47 peter-pc kernel[0] <Debug>: Wake reason: UHC2
-	#  1   2     3       4        5         6      7      8      9
-	# Dec  4 20:57:04 Peters-iMac kernel[0] <Notice>: Wake reason: XHC1
-	# Dec  5 14:27:54 Peters-iMac kernel[0] <Notice>: Wake reason: XHC1
-	# Dec  5 16:16:01 Peters-iMac kernel[0] <Notice>: Wake reason: RTC (Alarm)
-	# Dec  5 16:47:15 Peters-iMac kernel[0] <Notice>: Wake reason: GIGE (Network)
-	# Dec  5 19:09:18 Peters-iMac kernel[0] <Notice>: Wake reason: RTC (Alarm)
-	# Dec  5 19:10:19 Peters-iMac kernel[0] <Notice>: Wake reason: GIGE (Network)
-	# Dec  5 19:45:07 Peters-iMac kernel[0] <Notice>: Wake reason: GIGE (Network)
-
-	# Example of Dark Wake:
-	# Jan 16 00:52:44 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: Wake reason: RTC (Alarm)
-	# Jan 16 00:52:44 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: AirPort_Brcm43xx::powerChange: System Wake - Full Wake/ Dark Wake / Maintenance wake
-	#  1   2     3                   4                  5         6                7                        8      9  10   11    12   13  14    15       16
-	# Jan 16 01:53:07 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: Wake reason: RTC (Alarm)
-	#  1   2     3                   4                  5         6      7     8      9     10
-	# Jan 16 01:53:07 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: AirPort_Brcm43xx::powerChange: System Wake - Full Wake/ Dark Wake / Maintenance wake
-	# Jan 16 02:53:30 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: Wake reason: RTC (Alarm)
-	# Jan 16 02:53:30 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: AirPort_Brcm43xx::powerChange: System Wake - Full Wake/ Dark Wake / Maintenance wake
-	# Jan 16 03:53:53 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: Wake reason: RTC (Alarm)
-	# Jan 16 03:53:53 Eva-Magnussons-MacBook-Pro-old kernel[0] <Debug>: AirPort_Brcm43xx::powerChange: System Wake - Full Wake/ Dark Wake / Maintenance wake
-	# 
-	# Good article: http://www.cnet.com/news/how-to-find-system-wake-causes-in-os-x/
-	# Also:         http://www.opensource.apple.com/source/xnu/xnu-2422.1.72/iokit/IOKit/pwr_mgt/RootDomain.h
-	
-	WakeReasonTime="$(echo $WakeLine | awk '{print $1" "$2" "$3}')"
-	WakeReason="$(echo $WakeLine | sed 's/^.*>: Wake reason: //g' | awk '{print $1}')"
-	case "${WakeReason/[0-9]/}" in
-		OHC)  WakeReasonText="Open Host Controller, is usually USB or Firewire";;
-		EHC)  WakeReasonText="Enhanced Host Controller, another USB interface, can also be wireless/bluetooth";;
-		USB)  WakeReasonText="a USB device";;
-		UHC)  WakeReasonText="a USB device";;
-		LID0) WakeReasonText="the lid of your was opened";;
-		PWRB) WakeReasonText="the physical power button on your Mac";;
-		RTC)  WakeReasonText="Real Time Clock Alarm; generally from a scheduled sleep/wake.";;
-		XHC)  WakeReasonText="a BlueTooth-device is waking your computer";;
-		GIGE) WakeReasonText="Ethernet network connection";;
-		EC.PowerButton) WakeReasonText="The user pressed the power button";;
-		*)    WakeReasonText="Unknown cause"
-	esac
+    WakeLine="$(echo "$SleepWakeHistory" | grep "Wake from Deep Idle" | tail -1)"
+    # Ex: WakeLine='2025-05-30 20:48:06 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 trackpadkeyboard SMC.OutboxNotEmpty/HID Activity Using BATT (Charge:70%)           ' 
+    #     WakeLine='2025-05-30 23:01:52 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 lid SMC.OutboxNotEmpty/UserActivity Assertion Using AC (Charge:66%)           '
+    # 
+    # Maybe good article:     https://github.com/apple/darwin-xnu/blob/main/iokit/IOKit/pwr_mgt/IOPM.h
+    # Interesting (but old):  http://www.opensource.apple.com/source/xnu/xnu-2422.1.72/iokit/IOKit/pwr_mgt/RootDomain.h
+    
+    WakeTime="$(echo $WakeLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/")"                        # Ex: WakeTime='2025-05-30 20:48:06 +0200' 
+    WakeReason="$(echo $WakeLine | grep -Eo "Wake from Deep Idle .*" | grep -Eo "due to .*" | awk '{print $3" "$4}' | sed 's/smc.70070000 //; s/ Assertion//')"   # Ex: WakeReason=trackpadkeyboard 
+    case "${WakeReason/[0-9]/}" in
+        wifibt)            WakeReasonText="WiFi or Bluetooth device";;
+        lid)               WakeReasonText="lid was opened";;
+        trackpadkeyboard)  WakeReasonText="trackpad or keyboard";;
+        pwrbtn)            WakeReasonText="powerbutton was pressed";;
+        nub-spmi*)         WakeReasonText="time scheduled wake";;
+        UserActivity)      WakeReasonText="User woke the computer";;
+        *)                 WakeReasonText="unknown"
+    esac
 }
 
 # Find out information about PreventSystemSleep
-function What_Prevents_System_Sleep()
+What_Prevents_System_Sleep()
 {
-	# Find out if something is denying system sleep
-	PreventSystemSleep="$(/usr/bin/pmset -g assertions | grep "^\ *PreventSystemSleep\ *[01]$" | awk '{print $2}')"
-	# If so, report all such instances
-	if [ $PreventSystemSleep -eq 1 ]; then
-		# 'pmset -g assertions | grep DenySystemSleep'
-		# '  pid 26(configd): [0x000543f7000724b7] 00:00:22 DenySystemSleep named: "InternetSharingPreferencePlugin" '
-		#     1      2                   3             4            5         6                   7
-		echo "• System sleep is prevented by:"
-		/usr/bin/pmset -g assertions | grep DenySystemSleep | awk '{print $2" "$7}' | sed -e 's/(/ /' -e 's/):/ /' | tr -d \" > $TempFile1
-		exec 7<$TempFile1
-		while read -u 7 ProcID ProcName ClearText
-		do
-			echo "  - \"$ProcName\" (pid ${ProcID}, run by \"$(ps -p ${ProcID} -o user | grep -v USER)\"), reason: \"$ClearText\"" 
-		done
-		rm $TempFile1
-	else
-		#echo "• Nothing is preventing manually initiated system sleep"
-		echo "• Manually initiated system sleep is not prevented by anything"
-	fi
+    # Find out if something is prohibiting system sleep
+    PreventSystemSleep="$(echo "$PMSET_ASSERTIONS" | grep "^\ *PreventSystemSleep\ *[01]$" | awk '{print $2}')"
+    # If so, report all such instances
+    if [ $PreventSystemSleep -eq 1 ]; then
+        # 'pmset -g assertions | grep DenySystemSleep'
+        # '  pid 26(configd): [0x000543f7000724b7] 00:00:22 DenySystemSleep named: "InternetSharingPreferencePlugin" '
+        #     1      2                   3             4            5         6                   7
+        echo "• System sleep is prevented by:"
+        echo "$PMSET_ASSERTIONS" | grep DenySystemSleep | awk '{print $2" "$7}' | sed -e 's/(/ /' -e 's/):/ /' | tr -d \" > $TempFile1
+        exec 7<$TempFile1
+        while read -u 7 ProcID ProcName ClearText
+        do
+            echo "  - \"$ProcName\" (pid ${ProcID}, run by \"$(ps -p ${ProcID} -o user | grep -v USER)\"), reason: \"$ClearText\"" 
+        done
+        rm $TempFile1
+    else
+        #echo "• Nothing is preventing manually initiated system sleep"
+        echo "• Manually initiated system sleep is not prevented by anything"
+    fi
 }
 
 # Find out information about PreventUserIdleSystemSleep
-function What_Prevents_User_Idle_System_Sleep()
+What_Prevents_User_Idle_System_Sleep()
 {
-	PreventUserIdleSystemSleep="$(/usr/bin/pmset -g | grep -v "NSURLSessionTask" | grep "^\ *sleep\ *" | egrep "sleep prevented by ")"
-	if [ -n "$PreventUserIdleSystemSleep" ]; then
-		echo "• Idle sleep is prevented by:"
-		# Get a list of processes that prevent sleep.
-		# For OS X 10.10:
-		# pmset -g assertions | grep "PreventUserIdleSystemSleep named:"
-   		# pid 265(coreaudiod): [0x00022bca000115ea] 00:00:46 PreventUserIdleSystemSleep named: "com.apple.audio.context718.preventuseridlesleep" 
-   		# pid 39176(iTunes): [0x00022bca00011660] 00:00:46 PreventUserIdleSystemSleep named: "com.apple.iTunes.playback" 
-   		# pid 39215(AddressBookSour): [0x000228fd00011641] 00:00:11 PreventUserIdleSystemSleep named: "Address Book Source Sync" 
-   		# pid 258(nsurlsessiond): [0x0000581000011051] 00:00:00 PreventUserIdleSystemSleep named: "NSURLSessionTask EB62463F-8223-4C70-9EE6-00582953147D" 
-   		# pid 90178(uTorrent): [0x00001d8e00010781] 02:11:05 NoIdleSleepAssertion named: "there are active torrents" 
-   		# pid 28(powerd): [0x000000040008013d] 26:33:04 ExternalMedia named: "com.apple.powermanagement.externalmediamounted" 
-		# pid 256(coreaudiod): [0x0000f2e5000125a5] 00:10:29 PreventUserIdleSystemSleep named: "com.apple.audio.context314.preventuseridlesleep" 
-		#	Created for PID: 59194. 
-		# pid 256(coreaudiod): [0x0000e3af00012616] 01:15:23 PreventUserIdleSystemSleep named: "com.apple.audio.context348.preventuseridlesleep" 
-		#	Created for PID: 87288. 
+    PreventUserIdleSystemSleep="$(echo "$PMSET_G" | grep -v "NSURLSessionTask" | grep "^\ *sleep\ *" | grep -E "sleep prevented by ")"
+    if [ -n "$PreventUserIdleSystemSleep" ]; then
+        echo "• Idle sleep is prevented by:"
+        # Get a list of processes that prevent sleep.
+        # pmset -g assertions | grep "PreventUserIdleSystemSleep named:"
+        # 2025-05-31 20:01:08 | peter@Peters-MBP:~$ pmset -g assertions | grep "PreventUserIdleSystemSleep named:"
+        # pid 737(useractivityd): [0x0000a7090001987a] 00:00:01 PreventUserIdleSystemSleep named: "BTLEAdvertisement.EA7CC365-A76B-4E03-92C2-B501C1C17447"  
+        # pid 698(sharingd): [0x0000a6b700019848] 00:01:23 PreventUserIdleSystemSleep named: "Handoff"  
+        # pid 418(bluetoothd): [0x0000a70900019879] 00:00:01 PreventUserIdleSystemSleep named: "com.apple.BTStack"  
+        # pid 583(backupd): [0x0000700100018815] 03:54:51 PreventUserIdleSystemSleep named: "Backup Job"  
+        # pid 368(powerd): [0x0000a68800019794] 00:02:10 PreventUserIdleSystemSleep named: "Powerd - Prevent sleep while display is on"  
 
-   		# Apparently, in OS X 10.10, one has to look out for two ways to signal that the system may not sleep when idle:
-   		# 'PreventUserIdleSystemSleep'
-   		# 'NoIdleSleepAssertion'
+        PreventSystemSleepList="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid.*NoIdleSleepAssertion|^\ *pid.*PreventUserIdleSystemSleep" | sed 's/^\ *pid //g; s/(/:/; s/)//; s/ \[[0-9abcdefghx]*\] [^ ]* //; s/Prevent.*named: //; s/"//g')"
+        # Ex: PreventSystemSleepList='737:useractivityd:BTLEAdvertisement.EA7CC365-A76B-4E03-92C2-B501C1C17447  
+        #                             698:sharingd:Handoff  
+        #                             418:bluetoothd:com.apple.BTStack  
+        #                             583:backupd:Backup Job  
+        #                             368:powerd:Powerd - Prevent sleep while display is on  '
 
-   		## Previously (OS X <10.10), it was:
-		##  pid 110: [0x0000006e012c021b] PreventUserIdleSystemSleep named: "com.apple.audio.'AppleHDAEngineOutput:1B,0,1,2:0'.noidlesleep" 
-
-		# Create initial data file with processes that prevent the computer from sleeping
-		# Sequence:
-		# 1. Replace all CR with × (multiplier char (Hex: C3 97), not lowercase ”x”!)
-		# 2. Remove all tabs
-		# 3. Replace '×Created' with ' Created'
-		# 4. Replace all '×' with \n
-		# 5. filter out lines with '^\ *pid.*prevent' and '^\ *pid.*NoIdleSleep'
-		#pmset -g assertions | sed -e ':begin' -e '$!N;s/\n/×/; tbegin' | tr -d '\t' | sed -e 's/×Created/ Created/g' -e 's/×/\'$'\n/g' | egrep -i "^\ *pid.*prevent|^\ *pid.*NoIdleSleep" > $TempFile1
-		pmset -g assertions | sed -e ':begin' -e '$!N;s/\n/×/; tbegin' | tr -d '\t' | sed -e 's/×Created/ Created/g' -e 's/×/\'$'\n/g' | egrep "^\ *pid.*NoIdleSleepAssertion|^\ *pid.*PreventUserIdleSystemSleep" | sed -e 's/^ *pid //' -e 's/ [0-9]*:[0-9]*:[0-9]* //' -e 's/\[[0-9abcdefghx]*\]//' -e 's/): PreventUserIdleSystemSleep named: / /' -e 's/(/ /' -e 's/[):]//g' > $TempFile1
-		# Ex:
-		# 53609 iTunes "com.apple.iTunes.playback" 
-		# 33254 coreaudiod "com.apple.audio.context998.preventuseridlesleep"  Created for PID: 53609. 
-		# 33254 coreaudiod "com.apple.audio.context1231.preventuseridlesleep"  Created for PID: 13525. 
-		# 33254 coreaudiod "com.apple.audio.context1229.preventuseridlesleep"  Created for PID: 13525. 
-
-		exec 4<$TempFile1
-		while read -u 4 RAD
-		do
-			CreatedForProc=""
-			ProcID="$(echo $RAD | awk '{print $1}')"
-			ProcName="$(echo $RAD | awk '{print $2}')"
-			CreatedForPID="$(echo $RAD | grep -o "Created for PID [0-9]*\." | awk '{print $NF}' | cut -d\. -f1)"
-			if [ -n "$CreatedForPID" ]; then
-				ProcID="$CreatedForPID"
-				ProcName="$(basename "$(ps -o command -p $ProcID | grep -v COMMAND | sed 's;Internet Plug;Internet_Plug;g' | awk '{print $1}' | sed 's;Internet_Plug;Internet Plug;g')")"
-				#Reason="_"
-			#else
-				#Reason="$(echo $RAD | awk '{print $3}')"
-				#CreatedForProc="$(echo $RAD | cut -d\" -f2)"
-			fi
-			echo "$ProcName $ProcID" >> $TempFile2
-		done
-
-		# There may be multiple occurances; reduce!
-		less $TempFile2 | sort -u > $TempFile3
-
-		# Finally: report the data
-		exec 5<$TempFile3
-		while read -u 5 ProcName ProcID
-		do
-			Reason="$(pmset -g assertions | grep $ProcID | grep -v "Created for PID:" | egrep "PreventUserIdleSystemSleep|NoIdleSleepAssertion" | head -1 | awk -F: '{print $NF}')"
-			if [ -z "$Reason" ]; then
-				echo "  - \"$ProcName\" (pid ${ProcID}, run by \"$(ps -p ${ProcID} -o user | grep -v USER)\")"
-			else
-				echo "  - \"$ProcName\" (pid ${ProcID}, run by \"$(ps -p ${ProcID} -o user | grep -v USER)\"), reason: $Reason"
-			fi
-		done
-
-		rm $TempFile1
-		rm $TempFile2
-		#rm $TempFile3
-
-	else
-		echo "• Idle sleep is not prevented by anything"
-	fi
+        echo "$PreventSystemSleepList" | while IFS=':' read -r ProcID ProcName Reason
+        do
+            if [ -z "$Reason" ]; then
+                echo "  - \"$ProcName\" (pid ${ProcID}, run by \"$(ps -p ${ProcID} -o user | grep -v USER)\")"
+            else
+                echo "  - \"$ProcName\" (pid ${ProcID}, run by \"$(ps -p ${ProcID} -o user | grep -v USER)\"), reason: $Reason"
+            fi
+        done
+    else
+        echo "• Idle sleep is not prevented by anything"
+    fi
 }
 
-function PreventDisplaySleep()
+PreventDisplaySleep()
 {
-	PreventUserIdleDisplaySleep="$(egrep "PreventUserIdleDisplaySleep\ *[0-9]" $PMSET | awk '{print $2}')"
-	if [ "$PreventUserIdleDisplaySleep" = "1" ]; then
-		echo "  However, display sleep is currently prevented by:"
-		# Get a list of processes that prevent display sleep. Result will be like: "150 90348"
-		PreventUserIdleDisplaySleepPID="$(egrep "^\ *pid\ .*PreventUserIdleDisplaySleep" $PMSET | awk '{print $2}' | sed 's/://g')"
-		for pid in $PreventUserIdleSleepPID
-		do
-			ExtraText="$(egrep "^\ *pid ${pid}:.*PreventUserIdleDisplaySleep" /tmp/pmset.txt | cut -d\" -f2 | egrep -v "\.|\(")"
-			[[ -n "$ExtraText" ]] && ExtraText="${ExtraText}, "
-			echo "  - \"$(basename $(ps -p ${pid} | grep ${pid} | awk '{print $4}'))\" (${ExtraText}process id ${pid}, run by \"$(ps -p ${pid} -o user | grep -v USER)\")"
-		done
-	fi
+    PreventUserIdleDisplaySleep="$(echo "$PMSET_ASSERTIONS" | grep -E "PreventUserIdleDisplaySleep\ *[0-9]" | awk '{print $2}')"
+    if [ "$PreventUserIdleDisplaySleep" = "1" ]; then
+        echo "  However, display sleep is currently prevented by:"
+        # Get a list of processes that prevent display sleep. Result will be like: "150 90348"
+        PreventUserIdleDisplaySleepPID="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid\ .*NoDisplaySleepAssertion" | awk '{print $2}' | sed 's/://g')"
+        for pid in $PreventUserIdleSleepPID
+        do
+            ExtraText="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid ${pid}:.*PreventUserIdleDisplaySleep" | cut -d\" -f2 | grep -E -v "\.|\(")"
+            ps -o comm -p 71066 | grep -Ev "COMM"
+            [[ -n "$ExtraText" ]] && ExtraText="${ExtraText}, "
+            echo "  - \"$(basename $(ps -p ${pid} | grep ${pid} | awk '{print $4}'))\" (${ExtraText}process id ${pid}, run by \"$(ps -p ${pid} -o user | grep -v USER)\")"
+        done
+    else
+        echo "• Nothing is preventing the display from sleeping"
+    fi
 }
 
+
+#   _____   _   _  ______       _____  ______      ______   _   _   _   _   _____   _____   _____   _____   _   _   _____ 
+#  |  ___| | \ | | |  _  \     |  _  | |  ___|     |  ___| | | | | | \ | | /  __ \ |_   _| |_   _| |  _  | | \ | | /  ___|
+#  | |__   |  \| | | | | |     | | | | | |_        | |_    | | | | |  \| | | /  \/   | |     | |   | | | | |  \| | \ `--. 
+#  |  __|  | . ` | | | | |     | | | | |  _|       |  _|   | | | | | . ` | | |       | |     | |   | | | | | . ` |  `--. \
+#  | |___  | |\  | | |/ /      \ \_/ / | |         | |     | |_| | | |\  | | \__/\   | |    _| |_  \ \_/ / | |\  | /\__/ /
+#  \____/  \_| \_/ |___/        \___/  \_|         \_|      \___/  \_| \_/  \____/   \_/    \___/   \___/  \_| \_/ \____/ 
+#
+# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
+
+sleep_wake_history
 
 ################################################
 ### Print header
 ################################################
 printf "${ESC}${BlackBack};${WhiteFont}mSleep info for:${Reset}${ESC}${WhiteBack};${BlackFont}m $(uname -n) ${Reset}   ${ESC}${BlackBack};${WhiteFont}mRunning:${ESC}${WhiteBack};${BlackFont}m $SW_VERS ${Reset}   ${ESC}${BlackBack};${WhiteFont}mDate & time:${ESC}${WhiteBack};${BlackFont}m $(date +%F", "%R) ${Reset}\n"
 
+################################################
+### Print machine information
+################################################
+
+echo
+printf "${ESC}${BoldFace};${UnderlineFace}mComputer information:$Reset\n"
+echo "Model name:       $MODEL_IDENTIFIER_NAME"
+echo "Model identifier: $MODEL_IDENTIFIER"
+echo "Tech. spec.:      $MODEL_IDENTIFIER_URL"
 
 ################################################
 ### Why did it fall asleep before? (only if $short=f)
 ################################################
 if [ "$short" = "f" ]; then
-	echo
-	printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history${Reset}\n"
-	# See if the script is run by an admin-user (non-admins can't read sleep/wake from syslog)
-	if [ -n "$(/usr/bin/dscl . -read /Groups/admin GroupMembership | /usr/bin/grep -o $USER)" ]; then
-		# Create a tempfile to speed up things /syslog is very slow)
-		/usr/bin/syslog | egrep -i ": System Sleep|Previous Sleep Cause|>: Wake reason" > $SysLogTemp
-		WhyDidItFallAsleep
-		WhyDidItWake
-		echo "• Previous Sleep Cause: $PreviousSleepReason $([[ -n $PreviousSleepCause ]] && echo "on ${PreviousSleepTime}")"
-		if [ -n "$PreviousSleepLine" ]; then
-			printf "• The computer woke up on $WakeReasonTime because of \"$WakeReason\" ${ESC}${ItalicFace}m($WakeReasonText)$Reset\n"
-		else
-			echo "• No information about when the computer last woke up"
-		fi
-		/bin/rm $SysLogTemp
-	else
-		echo "Sorry, user \"$USER\" is not an admin-user and can't read sleep/wake reasons from syslog!"
-	fi
+    echo
+    printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history${Reset}${ESC}${ItalicFace};${UnderlineFace}m (from 'pmset -g log'):${Reset}\n"
+    WhyDidItFallAsleep
+    WhyDidItWake
+    echo "• Previous sleep cause: \"$PreviousSleepCause\" ($PreviousSleepTime)"
+    if [ -n "$PreviousSleepLine" ]; then
+        printf "• The computer woke up because of \"$WakeReason\" ${ESC}${ItalicFace}m($WakeReasonText)$Reset ($WakeTime)\n"
+    else
+        echo "• No information about when the computer last woke up"
+    fi
 fi
 
 ################################################
 # Find out hibernation mode
 ################################################
-Hibernation="$(/usr/bin/pmset -g | grep "^\ *hibernatemode\ *" | awk '{print $2}')"
+Hibernation="$(echo "$PMSET_G" | grep -E "^\ *hibernatemode\ *" | awk '{print $2}')"
 case $Hibernation in
-	0)  HibernationText="0 (memory not backed up to disk during sleep)";;
-	3)  HibernationText="3 (copy of memory stored on disk; RAM is powered on during sleep)";;
-	25) HibernationText="25 (memory stored on disk and system powered off during sleep)";;
-	*)  HibernationText="${Hibernation}: unknown hibernation mode. Caution advised!";;
+    0)  HibernationText="0 (memory not backed up to disk during sleep)";;
+    3)  HibernationText="3 (copy of memory stored on disk; RAM is powered on during sleep)";;
+    25) HibernationText="25 (memory stored on disk and system powered off during sleep)";;
+    *)  HibernationText="${Hibernation}: unknown hibernation mode. Caution advised!";;
 esac
 # Hibernation file size and modification time
-HibernationData="$(ls -lsh $(/usr/bin/pmset -g | grep hibernatefile | awk '{print $2}') 2>/dev/null)"
+HibernationData="$(ls -lsh $(echo "$PMSET_G" | grep hibernatefile | awk '{print $2}') 2>/dev/null)"
 # Ex: '2097152 -rw------T  1 root  wheel   2,0G  6 Dec 19:58 /var/vm/sleepimage'
 #         1         2      3   4     5       6   7  8    9        10 
 HibernationSize="$(echo $HibernationData | awk '{print $6}')"
-HibernationLocation="$(/usr/bin/pmset -g | grep hibernatefile | awk '{print $2}')"
+HibernationLocation="$(echo "$PMSET_G" | grep hibernatefile | awk '{print $2}')"
 
 echo
-printf "${ESC}${BoldFace};${UnderlineFace}mHibernation$Reset\n"
+printf "${ESC}${BoldFace};${UnderlineFace}mHibernation:$Reset\n"
 echo "Hibernation mode: $HibernationText"
 if [ -z "$HibernationData" ]; then
-	echo "Hibernation file: $HibernationLocation (Note! Hibernationfile has not been created!)"
+    echo "Hibernation file: $HibernationLocation (Note! Hibernationfile has not been created!)"
 else
-	HibernationDate="$(echo $HibernationData | awk '{print $7" "$8" "$9}')"
-	echo "Hibernation file: $HibernationLocation ($HibernationSize), changed ${HibernationDate}"
+    HibernationDate="$(echo $HibernationData | awk '{print $7" "$8" "$9}')"
+    echo "Hibernation file: $HibernationLocation ($HibernationSize), changed ${HibernationDate}"
 fi
 
 
@@ -475,32 +353,41 @@ fi
 ### Find out if the system is set to idle sleep
 ################################################
 echo
-printf "${ESC}${BoldFace};${UnderlineFace}mPower Settings$Reset\n"
+printf "${ESC}${BoldFace};${UnderlineFace}mPower Settings:$Reset\n"
 echo "The computer is running on: $PowerKind"
+[[ -n "$BatteryDetailsText" ]] && echo "• $BatteryDetailsText"
+[[ -n "$AdapterDetails" ]]     && echo "• Adapter details: $AdapterDetails"
 # The three below will be either 'n' (minutes) or '0' (no idlesleep)
-SystemSleepTimeOut="$(/usr/bin/pmset -g | grep "^\ *sleep\ *" | awk '{print $2}')"
-DisplaySleepTimeOut="$(/usr/bin/pmset -g | grep "^\ *displaysleep\ *" | awk '{print $2}')"
-DiskSleepTimeOut="$(/usr/bin/pmset -g | grep "^\ *disksleep\ *" | awk '{print $2}')"
+SystemSleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *sleep\ *" | awk '{print $2}')"
+DisplaySleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *displaysleep\ *" | awk '{print $2}')"
+DiskSleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *disksleep\ *" | awk '{print $2}')"
 # Print accordingly
-[[ ! SystemSleepTimeOut -eq 0 ]] && echo "• The system is set to sleep after $SystemSleepTimeOut minutes" || echo "• The system is set to NOT sleep when idle"
-[[ ! DisplaySleepTimeOut -eq 0 ]] && echo "• The display is set to sleep after $DisplaySleepTimeOut minutes" || echo "• The display is set to NOT sleep when idle"
-[[ ! DiskSleepTimeOut -eq 0 ]] && echo "• The disk is set to sleep when idle after $DiskSleepTimeOut minutes" || echo "• The disk is set to NOT sleep when idle"
+[[ ! SystemSleepTimeOut -eq 0 ]]  && echo "• The system is set to sleep after $SystemSleepTimeOut minutes"       || echo "• The system is set to NOT sleep when idle"
+[[ ! DisplaySleepTimeOut -eq 0 ]] && echo "• The display is set to sleep after $DisplaySleepTimeOut minutes"     || echo "• The display is set to NOT sleep when idle"
+[[ ! DiskSleepTimeOut -eq 0 ]]    && echo "• The disk is set to sleep when idle after $DiskSleepTimeOut minutes" || echo "• The disk is set to NOT sleep when idle"
 
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mCurrent sleep preventions:$Reset\n"
 # Report in the system is prevented from sleeping
 # We only need to report this if the system is set to sleep after some time
 if [ ! $SystemSleepTimeOut -eq 0 ]; then
-	# Report if something is denying system sleep
-	What_Prevents_System_Sleep
-	# Report if something is preventing system idle sleep
-	What_Prevents_User_Idle_System_Sleep
+    # Report if something is denying system sleep
+    What_Prevents_System_Sleep
+    # Report if something is preventing system idle sleep
+    What_Prevents_User_Idle_System_Sleep
 else
-	printf "${ESC}${ItalicFace}mSince the computer is set to not sleep at all, no reporting of sleep preventions is done${Reset}\n"
+    printf "${ESC}${ItalicFace}mSince the computer is set to not sleep at all, no reporting of sleep preventions is done${Reset}\n"
 fi
 # Report if something is preventing the display to sleep
 PreventDisplaySleep
 
+
+################################################
+### Print recent sleep/wake history
+################################################
+echo
+printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history:$Reset\n"
+echo "$SleepWakeHistory" | sed 's/Sleep\ *//; s/Wake\ *//; s/:TCPKeepAlive.*//; s/SMC.OutboxNotEmpty.*//; s/DarkWake to Full//; s/(.*//; s/state //; s/from Deep Idle \[[A-Z]*\] : //'
 
 
 echo
