@@ -356,7 +356,7 @@ echo
 printf "${ESC}${BoldFace};${UnderlineFace}mPower Settings:$Reset\n"
 echo "The computer is running on: $PowerKind"
 [[ -n "$BatteryDetailsText" ]] && echo "• $BatteryDetailsText"
-[[ -n "$AdapterDetails" ]]     && echo "• Adapter details: $AdapterDetails"
+[[ -n "$AdapterDetails" ]]     && echo "• Adapter details: $(echo "$AdapterDetails" | sed 's/000m//; s/500m/.5/')"
 # The three below will be either 'n' (minutes) or '0' (no idlesleep)
 SystemSleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *sleep\ *" | awk '{print $2}')"
 DisplaySleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *displaysleep\ *" | awk '{print $2}')"
