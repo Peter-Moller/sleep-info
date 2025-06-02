@@ -144,17 +144,17 @@ fi
 
 # Get the sleep / wake data. Takes just a few seconds, so should be ok
 sleep_wake_history() {
-    SleepWakeHistory="$(pmset -g log | grep -E "Entering Sleep state due to |Wake from Deep Idle " | grep -Ev "Maintenance Sleep|Sleep Service Back to Sleep|DarkWake from Deep Idle" | tail -10 | sed "s/$(date +%F)/Today at/; s/$(date -v-1d +%F)/Yesterday at/")"
+    SleepWakeHistory="$(pmset -g log | grep -E "Entering Sleep state due to |Wake from Deep Idle " | grep -Ev "Maintenance Sleep|Sleep Service Back to Sleep|DarkWake from Deep Idle" | tail -10)"
     # Ex: SleepWakeHistory='2025-05-30 17:39:28 +0200 Sleep                 Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:71%) 207 secs  
     #                       2025-05-30 20:48:06 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 trackpadkeyboard SMC.OutboxNotEmpty/HID Activity Using BATT (Charge:70%)           
-    #                       Yesterday at 09:52:51 +0200 Sleep                 Entering Sleep state due to 'Software Sleep pid=16433':TCPKeepAlive=active Using AC (Charge:99%) 2 secs    
-    #                       Yesterday at 09:55:00 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to NUB.SPMISw3IRQ nub-spmi0.0x02 rtc/HID Activity Using AC (Charge:99%)           
-    #                       Yesterday at 13:37:51 +0200 Sleep                 Entering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:84%) 295 secs  
-    #                       Yesterday at 16:06:30 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 lid SMC.OutboxNotEmpty/HID Activity Using BATT (Charge:83%)           
-    #                       Yesterday at 17:23:29 +0200 Sleep                 Entering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:100%) 10 secs   
-    #                       Yesterday at 17:23:53 +0200 Wake                  DarkWake to FullWake from Deep Idle [CDNVAP] : due to Notification Using AC (Charge:100%)           
-    #                       Yesterday at 23:14:05 +0200 Sleep                 Entering Sleep state due to 'Software Sleep pid=429':TCPKeepAlive=active Using AC (Charge:100%) 7 secs    
-    #                       Today at 09:13:01 +0200 Wake                  DarkWake to FullWake from Deep Idle [CDNVA] : due to UserActivity Assertion Using AC (Charge:100%)           '
+    #                       2025-05-31 09:52:51 +0200 Sleep                 Entering Sleep state due to 'Software Sleep pid=16433':TCPKeepAlive=active Using AC (Charge:99%) 2 secs    
+    #                       2025-05-31 09:55:00 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to NUB.SPMISw3IRQ nub-spmi0.0x02 rtc/HID Activity Using AC (Charge:99%)           
+    #                       2025-05-31 13:37:51 +0200 Sleep                 Entering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:84%) 295 secs  
+    #                       2025-05-31 16:06:30 +0200 Wake                  Wake from Deep Idle [CDNVA] : due to smc.70070000 lid SMC.OutboxNotEmpty/HID Activity Using BATT (Charge:83%)           
+    #                       2025-05-31 17:23:29 +0200 Sleep                 Entering Sleep state due to 'Clamshell Sleep':TCPKeepAlive=active Using Batt (Charge:100%) 10 secs   
+    #                       2025-05-31 17:23:53 +0200 Wake                  DarkWake to FullWake from Deep Idle [CDNVAP] : due to Notification Using AC (Charge:100%)           
+    #                       2025-05-31 23:14:05 +0200 Sleep                 Entering Sleep state due to 'Software Sleep pid=429':TCPKeepAlive=active Using AC (Charge:100%) 7 secs    
+    #                       2025-06-01 09:13:01 +0200 Wake                  DarkWake to FullWake from Deep Idle [CDNVA] : due to UserActivity Assertion Using AC (Charge:100%)           '
 }
 
 # Find out why it did fall asleep before
@@ -174,7 +174,7 @@ WhyDidItFallAsleep()
     PreviousSleepLine="$(echo "$SleepWakeHistory" | grep "Entering Sleep state due to" | tail -1)"
     # 2025-05-30 17:39:28 +0200 Sleep                 Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:71%) 207 secs 
     PreviousSleepCause="$(echo "$PreviousSleepLine" | cut -d\' -f2)"                   # Ex: PreviousSleepCause='Idle Sleep'
-    PreviousSleepTime="$(echo $PreviousSleepLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/")"        # Ex: PreviousSleepTime='2025-05-30 17:39:28'
+    PreviousSleepTime="$(echo $PreviousSleepLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/; s/$(date -v-1d +%F)/yesterday at/")"        # Ex: PreviousSleepTime='2025-05-30 17:39:28'
 }
 
 # Find out why it did wake
@@ -187,7 +187,7 @@ WhyDidItWake()
     # Maybe good article:     https://github.com/apple/darwin-xnu/blob/main/iokit/IOKit/pwr_mgt/IOPM.h
     # Interesting (but old):  http://www.opensource.apple.com/source/xnu/xnu-2422.1.72/iokit/IOKit/pwr_mgt/RootDomain.h
     
-    WakeTime="$(echo $WakeLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/")"                        # Ex: WakeTime='2025-05-30 20:48:06' 
+    WakeTime="$(echo $WakeLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/; s/$(date -v-1d +%F)/yesterday at/")"                        # Ex: WakeTime='2025-05-30 20:48:06' 
     WakeReason="$(echo $WakeLine | grep -Eo "Wake from Deep Idle .*" | grep -Eo "due to .*" | awk '{print $3" "$4}' | sed 's/smc.70070000 //; s/ Assertion//')"   # Ex: WakeReason=trackpadkeyboard 
     case "${WakeReason/[0-9]/}" in
         wifibt)            WakeReasonText="WiFi or Bluetooth device";;
@@ -387,7 +387,7 @@ PreventDisplaySleep
 ################################################
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history:$Reset\n"
-echo "$SleepWakeHistory" | sed "s/Sleep\ *//; s/Wake\ *//; s/:TCPKeepAlive.*//; s/SMC.OutboxNotEmpty.*//; s/DarkWake to Full//; s/(.*//; s/state //; s/from Deep Idle \[[A-Z]*\] : //"
+echo "$SleepWakeHistory" | sed "s/Sleep\ *//; s/Wake\ *//; s/:TCPKeepAlive.*//; s/SMC.OutboxNotEmpty.*//; s/DarkWake to Full//; s/(.*//; s/state //; s/from Deep Idle \[[A-Z]*\] : //; s/ +[0-9][0-9]00//; s/$(date +%F)/Today at/; s/$(date -v-1d +%F)/Yesterday at/"
 
 
 echo
