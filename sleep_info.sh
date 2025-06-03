@@ -101,9 +101,9 @@ ScriptFullName="${ScriptDirName}/${ScriptName}"
 PMSET_ASSERTIONS="$(pmset -g assertions)"
 PMSET_G="$(pmset -g)"
 SW_VERS="$(sw_vers --productName) $(sw_vers --productVersion)"
-MODEL_IDENTIFIER="$(system_profiler SPHardwareDataType | grep "Model Identifier" | awk '{print $NF}' )"                # Ex: MODEL_IDENTIFIER=MacBookPro18,3
-MODEL_IDENTIFIER_NAME="$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $1}')"    # Ex: MODEL_IDENTIFIER_NAME='MacBook Pro (14-inch, 2021)'
-MODEL_IDENTIFIER_URL="https:$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $4}')"     # Ex: MODEL_IDENTIFIER_URL=https://support.apple.com/kb/SP854
+MODEL_IDENTIFIER="$(system_profiler SPHardwareDataType | grep "Model Identifier" | awk '{print $NF}' )"                          # Ex: MODEL_IDENTIFIER=MacBookPro18,3
+MODEL_IDENTIFIER_NAME="$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $1}')"              # Ex: MODEL_IDENTIFIER_NAME='MacBook Pro (14-inch, 2021)'
+MODEL_IDENTIFIER_URL="https:$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $4}')"         # Ex: MODEL_IDENTIFIER_URL=https://support.apple.com/kb/SP854
 
 
 # Find out if we are running on 'AC Power' och 'Battery Power'
@@ -113,12 +113,24 @@ PMSET_PS="$(pmset -g ps)"
 #            -InternalBattery-0 (id=24117347)   91%; discharging; 5:57 remaining present: true'
 # Ex, Mac mini:
 # PMSET_PS='Now drawing from '\''AC Power'\'''
-PowerKind="$(echo "$PMSET_PS" | awk -F\' '{print $2}')"                                                      # Ex: PowerKind='AC Power' or PowerKind='Battery Power'
+PowerKind="$(echo "$PMSET_PS" | awk -F\' '{print $2}')"                                                                          # Ex: PowerKind='AC Power' or PowerKind='Battery Power'
 # If we are on battery, also report status
 if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ]; then
-    BatteryCycles="$(pmset -g rawbatt | grep -Eo "Cycles=[^;]*")"                                            # Ex: BatteryCycles=Cycles=184/1000
-    BatteryDetailsText="Battery at $(pmset -g batt | grep -Eo "[0-9]*%.*remaining*|[0-9]*%.*discharging|[0-9]*%.*finishing charge"); $BatteryCycles"        # Ex: BatteryDetailsText='Battery at 89%; discharging; 6:05 remaining present: true); Cycles=184/1000'
+    BatteryCycles="$(pmset -g rawbatt | grep -Eo "Cycles=[^;]*")"                                                                # Ex: BatteryCycles=Cycles=184/1000
+    BatteryDetailsText="$(pmset -g batt | grep -Eo "[0-9]*%.*remaining*|[0-9]*%.*discharging|[0-9]*%.*finishing charge"); $BatteryCycles"
+    # Ex: BatteryDetailsText='Battery at 89%; discharging; 6:05 remaining present: true); Cycles=184/1000'
+    BatteryDesignCapacity=$(ioreg -lrn AppleSmartBattery | grep -E "\"DesignCapacity\" = " | awk '{print $NF}')                  # Ex: BatteryDesignCapacity=4382
+    BatteryAppleRawMaxCapacity=$(ioreg -rn AppleSmartBattery | grep -E "\"AppleRawMaxCapacity\" = " | awk '{print $NF}')         # Ex: BatteryAppleRawMaxCapacity=3764
+    BatteryNominalChargeCapacity=$(ioreg -lrn AppleSmartBattery | grep -E "\"NominalChargeCapacity\" = " | awk '{print $NF}')    # Ex: BatteryNominalChargeCapacity=3894
+    BatteryAppleRawCurrentCapacity=$(ioreg -rn AppleSmartBattery | grep -E "\"AppleRawCurrentCapacity\" = " | awk '{print $NF}') # Ex: BatteryAppleRawCurrentCapacity=3764
+    # Calculate percentages
+    if [[ $BatteryAppleRawMaxCapacity -gt 0 && $BatteryDesignCapacity -gt 0 ]]; then
+        health_percent=$(( 100 * BatteryAppleRawMaxCapacity / BatteryDesignCapacity ))
+        BatteryHealth="${health_percent}% of the original $BatteryDesignCapacity mAh remains"
+    fi
 fi
+ScreenSaverActivationTime=$(( $(defaults -currentHost read com.apple.screensaver idleTime 2>/dev/null) / 60 ))
+ComputerName="$(scutil --get ComputerName)"                                                                                      # Ex: ComputerName='Peters MBA'
 # If we are on A) battery and B) external powersupply, get some details
 if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ] && [ "$PowerKind" = "AC Power" ]; then
     PMSET_ADAPTER="$(pmset -g adapter)"
@@ -293,7 +305,7 @@ sleep_wake_history
 ################################################
 ### Print header
 ################################################
-printf "${ESC}${BlackBack};${WhiteFont}mSleep info for:${Reset}${ESC}${WhiteBack};${BlackFont}m $(uname -n) ${Reset}   ${ESC}${BlackBack};${WhiteFont}mRunning:${ESC}${WhiteBack};${BlackFont}m $SW_VERS ${Reset}   ${ESC}${BlackBack};${WhiteFont}mDate & time:${ESC}${WhiteBack};${BlackFont}m $(date +%F", "%R) ${Reset}\n"
+printf "${ESC}${BlackBack};${WhiteFont}mSleep info for:${Reset}${ESC}${WhiteBack};${BlackFont}m $ComputerName ${Reset}   ${ESC}${BlackBack};${WhiteFont}mRunning:${ESC}${WhiteBack};${BlackFont}m $SW_VERS ${Reset}   ${ESC}${BlackBack};${WhiteFont}mDate & time:${ESC}${WhiteBack};${BlackFont}m $(date +%F", "%R) ${Reset}\n"
 
 ################################################
 ### Print machine information
@@ -355,16 +367,18 @@ fi
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mPower Settings:$Reset\n"
 echo "The computer is running on: $PowerKind"
-[[ -n "$BatteryDetailsText" ]] && echo "• $BatteryDetailsText"
-[[ -n "$AdapterDetails" ]]     && echo "• Adapter details: $(echo "$AdapterDetails" | sed 's/000m//; s/500m/.5/')"
+[[ -n "$BatteryDetailsText" ]]           && echo "• Battery at $BatteryDetailsText"
+[[ -n "$BatteryHealth" ]]                && echo "• Battery capacity: $BatteryHealth"
+[[ -n "$AdapterDetails" ]]               && echo "• Adapter details: $(echo "$AdapterDetails" | sed 's/000m//; s/500m/.5/')"
 # The three below will be either 'n' (minutes) or '0' (no idlesleep)
 SystemSleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *sleep\ *" | awk '{print $2}')"
 DisplaySleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *displaysleep\ *" | awk '{print $2}')"
 DiskSleepTimeOut="$(echo "$PMSET_G" | grep -E "^\ *disksleep\ *" | awk '{print $2}')"
 # Print accordingly
-[[ ! SystemSleepTimeOut -eq 0 ]]  && echo "• The system is set to sleep after $SystemSleepTimeOut minutes"       || echo "• The system is set to NOT sleep when idle"
-[[ ! DisplaySleepTimeOut -eq 0 ]] && echo "• The display is set to sleep after $DisplaySleepTimeOut minutes"     || echo "• The display is set to NOT sleep when idle"
-[[ ! DiskSleepTimeOut -eq 0 ]]    && echo "• The disk is set to sleep when idle after $DiskSleepTimeOut minutes" || echo "• The disk is set to NOT sleep when idle"
+[[ ! SystemSleepTimeOut -eq 0 ]]         && echo "• The system is set to sleep after $SystemSleepTimeOut minutes"       || echo "• The system is set to NOT sleep when idle"
+[[ ! DisplaySleepTimeOut -eq 0 ]]        && echo "• The display is set to sleep after $DisplaySleepTimeOut minutes"     || echo "• The display is set to NOT sleep when idle"
+[[ ! DiskSleepTimeOut -eq 0 ]]           && echo "• The disk is set to sleep when idle after $DiskSleepTimeOut minutes" || echo "• The disk is set to NOT sleep when idle"
+[[ ! ScreenSaverActivationTime -eq 0 ]]  && echo "• Screen Saver activates after $ScreenSaverActivationTime minutes"
 
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mCurrent sleep preventions:$Reset\n"
