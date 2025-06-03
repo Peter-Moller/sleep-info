@@ -9,6 +9,3 @@ Important components:
 ---------------------
 
 The command `pmset` is used to gather information about sleep settings and also what prevents the computer form sleeping.
-
-`syslog` is used to gather information about when and why the computer fell asleep/woke up. This requires, however, that the user is in the group `admin` or nothing will be found.
- 
