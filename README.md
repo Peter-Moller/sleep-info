@@ -8,4 +8,5 @@ A bash script for macOS that details information about sleep: why, why not, when
 Important components:
 ---------------------
 
-The command `pmset` is used to gather information about sleep settings and also what prevents the computer form sleeping.
+The command `pmset` is used to gather information about sleep settings and also what prevents the computer form sleeping.  
+The command `ioreg` is used to gather battery health data.
