@@ -98,8 +98,11 @@ MacBook Pro (13-inch, Mid 2009):MacBookPro5,5:https://support.apple.com/kb/SP541
 # https://support.apple.com/en-us/108052
 # -----------------------------------------------------
 MacBook Pro (14-inch, 2024):Mac16,1:https://support.apple.com/en-us/121552
-MacBook Pro (14-inch, 2024):Mac16,6, Mac16,8:https://support.apple.com/en-us/121553
-MacBook Pro (14-inch, Nov 2023):Mac15,6, Mac15,8, Mac15,10:https://support.apple.com/kb/SP898
+MacBook Pro (14-inch, 2024):Mac16,8:https://support.apple.com/en-us/121553
+MacBook Pro (14-inch, 2024):Mac16,6:https://support.apple.com/en-us/121553
+MacBook Pro (14-inch, Nov 2023):Mac15,10:https://support.apple.com/kb/SP898
+MacBook Pro (14-inch, Nov 2023):Mac15,8:https://support.apple.com/kb/SP898
+MacBook Pro (14-inch, Nov 2023):Mac15,6:https://support.apple.com/kb/SP898
 MacBook Pro (14-inch, Nov 2023):Mac15,3:https://support.apple.com/kb/SP900
 MacBook Pro (14-inch, 2023):Mac14,5, Mac14,9:https://support.apple.com/kb/SP889
 MacBook Pro (14-inch, 2021):MacBookPro18,3, MacBookPro18,4:https://support.apple.com/kb/SP854
@@ -110,9 +113,13 @@ MacBook Pro (14-inch, 2021):MacBookPro18,4:https://support.apple.com/kb/SP854
 # MacBook Pro, 15" & 16"
 # https://support.apple.com/en-us/108052
 # -----------------------------------------------------
-MacBook Pro (16-inch, 2024):Mac16,7, Mac16,5:https://support.apple.com/en-us/121554
-MacBook Pro (16-inch, Nov 2023):Mac15,7, Mac15,9, Mac15,11:https://support.apple.com/kb/SP899
-MacBook Pro (16-inch, 2023):Mac14,6, Mac14,10:https://support.apple.com/kb/SP890
+MacBook Pro (16-inch, 2024):Mac16,7:https://support.apple.com/en-us/121554
+MacBook Pro (16-inch, 2024):Mac16,5:https://support.apple.com/en-us/121554
+MacBook Pro (16-inch, Nov 2023):Mac15,11:https://support.apple.com/kb/SP899
+MacBook Pro (16-inch, Nov 2023):Mac15,9:https://support.apple.com/kb/SP899
+MacBook Pro (16-inch, Nov 2023):Mac15,7:https://support.apple.com/kb/SP899
+MacBook Pro (16-inch, 2023):Mac14,10:https://support.apple.com/kb/SP890
+MacBook Pro (16-inch, 2023):Mac14,6:https://support.apple.com/kb/SP890
 MacBook Pro (16-inch, 2021):MacBookPro18,1, MacBookPro18,2:https://support.apple.com/kb/SP858
 MacBook Pro (16-inch, 2019):MacBookPro16,4:https://support.apple.com/kb/SP809
 MacBook Pro (16-inch, 2019):MacBookPro16,1:https://support.apple.com/kb/SP809
