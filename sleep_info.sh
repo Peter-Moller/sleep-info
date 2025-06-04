@@ -117,8 +117,10 @@ PowerKind="$(echo "$PMSET_PS" | awk -F\' '{print $2}')"                         
 # If we are on battery, also report status
 if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ]; then
     BatteryCycles="$(pmset -g rawbatt | grep -Eo "Cycles=[^;]*")"                                                                # Ex: BatteryCycles=Cycles=184/1000
-    BatteryDetailsText="$(pmset -g batt | grep -Eo "[0-9]*%.*remaining*|[0-9]*%.*discharging|[0-9]*%.*finishing charge"); $BatteryCycles"
-    # Ex: BatteryDetailsText='Battery at 89%; discharging; 6:05 remaining present: true); Cycles=184/1000'
+    BatteryDetailsText="$(pmset -g batt | grep -Eo "[0-9]*%.*remaining|[0-9]*%.*discharging|[0-9]*%.*finishing charge|[0-9]*%.*not charging"); $BatteryCycles"
+    # Ex: BatteryDetailsText='89%; discharging; 6:05 remaining; Cycles=184/1000'
+    # Ex: BatteryDetailsText='80%; AC attached; not charging; Cycles=185/1000'
+    # Ex: BatteryDetailsText='30%; charging; 2:36 remaining; Cycles=56/1000'
     BatteryDesignCapacity=$(ioreg -lrn AppleSmartBattery | grep -E "\"DesignCapacity\" = " | awk '{print $NF}')                  # Ex: BatteryDesignCapacity=4382
     BatteryAppleRawMaxCapacity=$(ioreg -rn AppleSmartBattery | grep -E "\"AppleRawMaxCapacity\" = " | awk '{print $NF}')         # Ex: BatteryAppleRawMaxCapacity=3764
     BatteryNominalChargeCapacity=$(ioreg -lrn AppleSmartBattery | grep -E "\"NominalChargeCapacity\" = " | awk '{print $NF}')    # Ex: BatteryNominalChargeCapacity=3894
@@ -129,7 +131,8 @@ if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ]; then
         BatteryHealth="${health_percent}% of the original $BatteryDesignCapacity mAh remains"
     fi
 fi
-ScreenSaverActivationTime=$(( $(defaults -currentHost read com.apple.screensaver idleTime 2>/dev/null) / 60 ))
+ScreenSaverActivationTimeSec=$(defaults -currentHost read com.apple.screensaver idleTime 2>/dev/null)                            # Ex: ScreenSaverActivationTimeSec=120
+ScreenSaverActivationTime=$(( ${ScreenSaverActivationTimeSec:-0} / 60 ))                                                         # Ex: ScreenSaverActivationTime=2
 ComputerName="$(scutil --get ComputerName)"                                                                                      # Ex: ComputerName='Peters MBA'
 # If we are on A) battery and B) external powersupply, get some details
 if [ -n "$(echo "$PMSET_PS" | grep "InternalBattery")" ] && [ "$PowerKind" = "AC Power" ]; then
@@ -401,7 +404,8 @@ PreventDisplaySleep
 ################################################
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history:$Reset\n"
-echo "$SleepWakeHistory" | sed "s/Sleep\ *//; s/Wake\ *//; s/:TCPKeepAlive.*//; s/SMC.OutboxNotEmpty.*//; s/DarkWake to Full//; s/(.*//; s/state //; s/from Deep Idle \[[A-Z]*\] : //; s/ +[0-9][0-9]00//; s/$(date +%F)/Today at/; s/$(date -v-1d +%F)/Yesterday at/"
+echo "$SleepWakeHistory" | sed "s/Sleep\ *//; s/Wake\ *//; s/:TCPKeepAlive.*//; s/SMC.OutboxNotEmpty.*//; s/DarkWake to Full//; s/(.*//; s/state //; s/from Deep Idle \[[A-Z]*\] : //; s/ +[0-9][0-9]00//; s/$(date +%F)/Today at/; s/$(date -v-1d +%F)/Yesterday at/" | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}//g'
+
 
 
 echo
