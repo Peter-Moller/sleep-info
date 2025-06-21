@@ -29,7 +29,6 @@ This script displays information regarding your Macs sleep.
 
 OPTIONS:
   -h      Show this message
-  -u      Upgrade the script
   -s      Short version (no info about when/why the computer slept/woke)
 EOF
 }
@@ -38,13 +37,14 @@ TempFile1="/tmp/sleep_info_temp1.txt"
 TempFile2="/tmp/sleep_info_temp2.txt"
 TempFile3="/tmp/sleep_info_temp3.txt"
 short="f"
+AppleSWSupportJSONfile=/tmp/.AppleSWSupport.JSON
+
 
 while getopts "hus" OPTION
 do
     case $OPTION in
         h)  usage
             exit 1;;
-        u)  fetch_new=t;;
         s)  short=t;;
         *)  usage
             exit;;
@@ -100,7 +100,7 @@ ScriptFullName="${ScriptDirName}/${ScriptName}"
 
 PMSET_ASSERTIONS="$(pmset -g assertions)"
 PMSET_G="$(pmset -g)"
-SW_VERS="$(sw_vers --productName) $(sw_vers --productVersion)"
+SW_VERS="$(sw_vers --productName) $(sw_vers --productVersion)"                                                                   # Ex: SW_VERS='macOS 15.5'
 MODEL_IDENTIFIER="$(system_profiler SPHardwareDataType | grep "Model Identifier" | awk '{print $NF}' )"                          # Ex: MODEL_IDENTIFIER=MacBookPro18,3
 MODEL_IDENTIFIER_NAME="$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $1}')"              # Ex: MODEL_IDENTIFIER_NAME='MacBook Pro (14-inch, 2021)'
 MODEL_IDENTIFIER_URL="https:$(grep ".*:${MODEL_IDENTIFIER}:" "${ScriptDirName}/Mac-models.txt" |  awk -F: '{print $4}')"         # Ex: MODEL_IDENTIFIER_URL=https://support.apple.com/kb/SP854
@@ -293,6 +293,54 @@ PreventDisplaySleep()
     fi
 }
 
+is_valid_apple_json() {
+  [[ ! -s "$AppleSWSupportJSONfile" ]] && return 1
+  jq -e '.PublicAssetSets? as $pas | ($pas | type == "object") and ($pas.macOS? | type == "array")' "$AppleSWSupportJSONfile" >/dev/null 2>&1
+}
+
+fetch_apple_json() {
+    if ! is_valid_apple_json; then
+        #echo "Fetching fresh macOS version data from Apple..."
+        curl --silent --insecure https://gdmf.apple.com/v2/pmv --output "$AppleSWSupportJSONfile"
+
+        if ! is_valid_apple_json; then
+            #echo "Error: Downloaded file is not a valid Apple macOS version JSON."
+            rm -f "$AppleSWSupportJSONfile"
+            exit 1
+        fi
+    #else
+    #    echo "Using cached macOS version data from $AppleSWSupportJSONfile"
+    fi
+}
+
+find_OS_versions() {
+    if type -p jq &>/dev/null; then
+        HardwareID=$(ioreg -l | grep target-sub-type | cut -d\" -f4)                                                                  # Ex: HardwareID=J314sAP
+        fetch_apple_json
+        #AppleSWSupportJSON="$(curl --silent --insecure https://gdmf.apple.com/v2/pmv)"                                                # Really big JSON object
+        LastestMacOSVersion="$(cat "$AppleSWSupportJSONfile" | jq -r '.PublicAssetSets.macOS[]?.ProductVersion' | sort -V | tail -n 1)"  # Ex: LastestMacOSVersion=15.5
+        SupportedVersions="$(cat "$AppleSWSupportJSONfile" | jq -r --arg hw "$HardwareID" '.PublicAssetSets.macOS[] | select(.SupportedDevices[]? == $hw) | .ProductVersion' | sort -V)"
+        # Ex: SupportedVersions='12.7.6
+        #                        13.7.6
+        #                        14.7.6
+        #                        15.5'
+        if [[ -z "$SupportedVersions" ]]; then
+            echo "No supported macOS versions found for this hardware."
+        else
+            FirstSupportedOS=$(echo "$SupportedVersions" | head -n 1)                                                                 # Ex: FirstSupportedOS=12.7.6
+            if [ "$FirstSupportedOS" = "$LastestMacOSVersion" ]; then
+                FirstSupportedOS="$LastestMacOSVersion (this is also the latest macOS version released by Apple)"
+            fi
+            LastSupportedOS=$(echo "$SupportedVersions" | tail -n 1)                                                                  # Ex: LastSupportedOS=15.5
+            if [ "$LastSupportedOS" = "$LastestMacOSVersion" ]; then
+                LastSupportedOS="$LastestMacOSVersion (this is also the latest macOS version released by Apple)"
+            fi
+        fi
+    else
+        OSVersionString="Error: 'jq' is required. Install it with 'brew install jq'."
+    fi
+}
+
 
 #   _____   _   _  ______       _____  ______      ______   _   _   _   _   _____   _____   _____   _____   _   _   _____ 
 #  |  ___| | \ | | |  _  \     |  _  | |  ___|     |  ___| | | | | | \ | | /  __ \ |_   _| |_   _| |  _  | | \ | | /  ___|
@@ -314,11 +362,15 @@ printf "${ESC}${BlackBack};${WhiteFont}mSleep info for:${Reset}${ESC}${WhiteBack
 ### Print machine information
 ################################################
 
+find_OS_versions
+
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mComputer information:$Reset\n"
-echo "Model name:       $MODEL_IDENTIFIER_NAME"
-echo "Model identifier: $MODEL_IDENTIFIER"
-echo "Tech. spec.:      $MODEL_IDENTIFIER_URL"
+echo "Model name:         $MODEL_IDENTIFIER_NAME"
+echo "Model identifier:   $MODEL_IDENTIFIER"
+echo "Tech. spec.:        $MODEL_IDENTIFIER_URL"
+echo "First supported OS: $FirstSupportedOS"
+echo "Last supported OS:  $LastSupportedOS"
 
 ################################################
 ### Why did it fall asleep before? (only if $short=f)
