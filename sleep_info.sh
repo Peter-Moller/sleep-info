@@ -315,7 +315,12 @@ fetch_apple_json() {
 
 find_OS_versions() {
     if type -p jq &>/dev/null; then
-        HardwareID=$(ioreg -l | grep target-sub-type | cut -d\" -f4)                                                                  # Ex: HardwareID=J314sAP
+        # Get the processor type:
+        if [ "$(uname -m)" = "arm64" ]; then
+            HardwareID="$(ioreg -l | grep target-sub-type | cut -d\" -f4)"                                                            # Ex: HardwareID=J314sAP
+        else
+            HardwareID="$(ioreg -l | grep -i board-id | cut -d\" -f4)"                                                                # Ex: HardwareID='Mac-35C5E08120C7EEAF'
+        fi
         fetch_apple_json
         #AppleSWSupportJSON="$(curl --silent --insecure https://gdmf.apple.com/v2/pmv)"                                                # Really big JSON object
         LastestMacOSVersion="$(cat "$AppleSWSupportJSONfile" | jq -r '.PublicAssetSets.macOS[]?.ProductVersion' | sort -V | tail -n 1)"  # Ex: LastestMacOSVersion=15.5
@@ -365,7 +370,7 @@ printf "${ESC}${BlackBack};${WhiteFont}mSleep info for:${Reset}${ESC}${WhiteBack
 find_OS_versions
 
 echo
-printf "${ESC}${BoldFace};${UnderlineFace}mComputer information:$Reset\n"
+printf "${ESC}${BoldFace};${UnderlineFace}mHardware information:$Reset\n"
 echo "Model name:         $MODEL_IDENTIFIER_NAME"
 echo "Model identifier:   $MODEL_IDENTIFIER"
 echo "Tech. spec.:        $MODEL_IDENTIFIER_URL"
