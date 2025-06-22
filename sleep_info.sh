@@ -29,14 +29,12 @@ This script displays information regarding your Macs sleep.
 
 OPTIONS:
   -h      Show this message
-  -s      Short version (no info about when/why the computer slept/woke)
 EOF
 }
 
 TempFile1="/tmp/sleep_info_temp1.txt"
 TempFile2="/tmp/sleep_info_temp2.txt"
 TempFile3="/tmp/sleep_info_temp3.txt"
-short="f"
 AppleSWSupportJSONfile=/tmp/.AppleSWSupport.JSON
 
 
@@ -45,7 +43,6 @@ do
     case $OPTION in
         h)  usage
             exit 1;;
-        s)  short=t;;
         *)  usage
             exit;;
     esac
@@ -274,6 +271,7 @@ What_Prevents_User_Idle_System_Sleep()
     fi
 }
 
+# Find out what is keeping the display from sleeping (if anything)
 PreventDisplaySleep()
 {
     PreventUserIdleDisplaySleep="$(echo "$PMSET_ASSERTIONS" | grep -E "PreventUserIdleDisplaySleep\ *[0-9]" | awk '{print $2}')"                          # Ex: PreventUserIdleDisplaySleep=1
@@ -287,8 +285,12 @@ PreventDisplaySleep()
             local RunningProcess="$(ps -o comm -p $pid | grep -Ev "COMM")"  
             # Ex: RunningProcess='/Applications/Adobe Illustrator 2025/Adobe Illustrator.app/Contents/MacOS/CEPHtmlEngine/CEPHtmlEngine.app/Contents/MacOS/CEPHtmlEngine'
             local RunningProcessOwner="$(ps -p ${pid} -o user | grep -v USER)"                                                                            # Ex: RunningProcessOwner=peter
-            #[[ -n "$RunningJob" ]] && RunningJob="${RunningJob}, "
-            echo "  - \"$RunningJob\"; process id ${pid}, run by \"$RunningProcessOwner\" (full process is: \"$RunningProcess\"))"
+            if [ ${#RunningProcess} -lt 41 ]; then
+                echo "  - \"$RunningJob\"; process id ${pid}, run by \"$RunningProcessOwner\" (full process is: \"$RunningProcess\")"
+            else
+                echo "  - \"$RunningJob\"; process id ${pid}, run by \"$RunningProcessOwner\" (full process is:)"
+                echo "    \"$RunningProcess\""
+            fi
         done
     else
         echo "• Nothing is preventing the display from sleeping"
@@ -358,18 +360,32 @@ find_OS_versions() {
 #
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # 
 
-sleep_wake_history
 
 ################################################
 ### Print header
 ################################################
 printf "${ESC}${BlackBack};${WhiteFont}mSleep info for:${Reset}${ESC}${WhiteBack};${BlackFont}m $ComputerName ${Reset}   ${ESC}${BlackBack};${WhiteFont}mRunning:${ESC}${WhiteBack};${BlackFont}m $SW_VERS ${Reset}   ${ESC}${BlackBack};${WhiteFont}mDate & time:${ESC}${WhiteBack};${BlackFont}m $(date +%F", "%R) ${Reset}\n"
 
+
+################################################
+### Generate data
+################################################
+printf "Generating data..."
+sleep_wake_history
+printf "."
+find_OS_versions
+printf "."
+WhyDidItFallAsleep
+printf "."
+WhyDidItWake
+printf "."
+printf "${ESC}2K"  # Empty the entire line
+
+
 ################################################
 ### Print machine information
 ################################################
 
-find_OS_versions
 
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mHardware information:$Reset\n"
@@ -380,19 +396,15 @@ echo "First supported OS: $FirstSupportedOS"
 echo "Last supported OS:  $LastSupportedOS"
 
 ################################################
-### Why did it fall asleep before? (only if $short=f)
+### Why did it fall asleep before? 
 ################################################
-if [ "$short" = "f" ]; then
-    echo
-    printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history${Reset}${ESC}${ItalicFace};${UnderlineFace}m (from 'pmset -g log'):${Reset}\n"
-    WhyDidItFallAsleep
-    WhyDidItWake
-    echo "• Previous sleep cause: \"$PreviousSleepCause\" ($PreviousSleepTime)"
-    if [ -n "$PreviousSleepLine" ]; then
-        printf "• The computer woke up because of \"$WakeReason\" ${ESC}${ItalicFace}m($WakeReasonText)$Reset ($WakeTime)\n"
-    else
-        echo "• No information about when the computer last woke up"
-    fi
+echo
+printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history${Reset}${ESC}${ItalicFace};${UnderlineFace}m (from 'pmset -g log'):${Reset}\n"
+echo "• Previous sleep cause: \"$PreviousSleepCause\" ($PreviousSleepTime)"
+if [ -n "$PreviousSleepLine" ]; then
+    printf "• The computer woke up because of \"$WakeReason\" ${ESC}${ItalicFace}m($WakeReasonText)$Reset ($WakeTime)\n"
+else
+    echo "• No information about when the computer last woke up"
 fi
 
 ################################################
@@ -454,9 +466,9 @@ if [ ! $SystemSleepTimeOut -eq 0 ]; then
 else
     printf "${ESC}${ItalicFace}mSince the computer is set to not sleep at all, no reporting of sleep preventions is done${Reset}\n"
 fi
+
 # Report if something is preventing the display to sleep
 PreventDisplaySleep
-
 
 ################################################
 ### Print recent sleep/wake history
@@ -464,8 +476,6 @@ PreventDisplaySleep
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history:$Reset\n"
 echo "$SleepWakeHistory" | sed "s/Sleep\ *//; s/Wake\ *//; s/:TCPKeepAlive.*//; s/SMC.OutboxNotEmpty.*//; s/DarkWake to Full//; s/(.*//; s/state //; s/from Deep Idle \[[A-Z]*\] : //; s/ +[0-9][0-9]00//; s/$(date +%F)/Today at/; s/$(date -v-1d +%F)/Yesterday at/" | sed -E 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}//g'
-
-
 
 echo
 printf "${ESC}${ItalicFace}mNote: to make the computer sleep right away, type \"pmset sleepnow\"$Reset\n"
