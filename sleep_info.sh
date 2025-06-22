@@ -276,17 +276,19 @@ What_Prevents_User_Idle_System_Sleep()
 
 PreventDisplaySleep()
 {
-    PreventUserIdleDisplaySleep="$(echo "$PMSET_ASSERTIONS" | grep -E "PreventUserIdleDisplaySleep\ *[0-9]" | awk '{print $2}')"
+    PreventUserIdleDisplaySleep="$(echo "$PMSET_ASSERTIONS" | grep -E "PreventUserIdleDisplaySleep\ *[0-9]" | awk '{print $2}')"                          # Ex: PreventUserIdleDisplaySleep=1
     if [ "$PreventUserIdleDisplaySleep" = "1" ]; then
         echo "  However, display sleep is currently prevented by:"
         # Get a list of processes that prevent display sleep. Result will be like: "150 90348"
-        PreventUserIdleDisplaySleepPID="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid\ .*NoDisplaySleepAssertion" | awk '{print $2}' | sed 's/://g')"
-        for pid in $PreventUserIdleSleepPID
+        PreventUserIdleDisplaySleepPID="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid.*NoDisplaySleepAssertion" | awk '{print $2}' | sed 's/(.*//g')"     # Ex: PreventUserIdleDisplaySleepPID=1342
+        for pid in $PreventUserIdleDisplaySleepPID
         do
-            ExtraText="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid ${pid}:.*PreventUserIdleDisplaySleep" | cut -d\" -f2 | grep -E -v "\.|\(")"
-            ps -o comm -p 71066 | grep -Ev "COMM"
-            [[ -n "$ExtraText" ]] && ExtraText="${ExtraText}, "
-            echo "  - \"$(basename $(ps -p ${pid} | grep ${pid} | awk '{print $4}'))\" (${ExtraText}process id ${pid}, run by \"$(ps -p ${pid} -o user | grep -v USER)\")"
+            local RunningJob="$(echo "$PMSET_ASSERTIONS" | grep -E "^\ *pid ${pid}.*NoDisplaySleepAssertion" | cut -d\" -f2 | grep -E -v "\.|\(")"        # Ex: RunningJob='Video Wake Lock'
+            local RunningProcess="$(ps -o comm -p $pid | grep -Ev "COMM")"  
+            # Ex: RunningProcess='/Applications/Adobe Illustrator 2025/Adobe Illustrator.app/Contents/MacOS/CEPHtmlEngine/CEPHtmlEngine.app/Contents/MacOS/CEPHtmlEngine'
+            local RunningProcessOwner="$(ps -p ${pid} -o user | grep -v USER)"                                                                            # Ex: RunningProcessOwner=peter
+            #[[ -n "$RunningJob" ]] && RunningJob="${RunningJob}, "
+            echo "  - \"$RunningJob\"; process id ${pid}, run by \"$RunningProcessOwner\" (full process is: \"$RunningProcess\"))"
         done
     else
         echo "• Nothing is preventing the display from sleeping"
