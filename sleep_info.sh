@@ -421,21 +421,23 @@ case $Hibernation in
     0)  HibernationText="0 (memory not backed up to disk during sleep)";;
     3)  HibernationText="3 (copy of memory stored on disk; RAM is powered on during sleep)";;
     25) HibernationText="25 (memory stored on disk and system powered off during sleep)";;
-    *)  HibernationText="${Hibernation}: unknown hibernation mode. Caution advised!";;
+    "") HibernationText="none (hibernation mode not set)";;
+    *)  HibernationText="${Hibernation}: unknown hibernation mode (\"${Hibernation:---none--}\"). Caution advised!";;
 esac
 # Hibernation file size and modification time
-HibernationData="$(ls -lsh $(echo "$PMSET_G" | grep hibernatefile | awk '{print $2}') 2>/dev/null)"
-# Ex: '2097152 -rw------T  1 root  wheel   2,0G  6 Dec 19:58 /var/vm/sleepimage'
-#         1         2      3   4     5       6   7  8    9        10 
-HibernationSize="$(echo $HibernationData | awk '{print $6}')"
-HibernationLocation="$(echo "$PMSET_G" | grep hibernatefile | awk '{print $2}')"
+HibernateFile="$(echo "$PMSET_G" | grep hibernatefile | awk '{print $2}')"
+if [ -n "$HibernateFile" ]; then
+    HibernationData="$(ls -lsh  2>/dev/null)"
+    # Ex: '2097152 -rw------T  1 root  wheel   2,0G  6 Dec 19:58 /var/vm/sleepimage'
+    #         1         2      3   4     5       6   7  8    9        10
+    HibernationSize="$(echo $HibernationData | awk '{print $6}')"
+    HibernationLocation="$(echo "$PMSET_G" | grep hibernatefile | awk '{print $2}')"
+fi
 
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mHibernation:$Reset\n"
 echo "Hibernation mode: $HibernationText"
-if [ -z "$HibernationData" ]; then
-    echo "Hibernation file: $HibernationLocation (Note! Hibernationfile has not been created!)"
-else
+if [ -n "$HibernationData" ]; then
     HibernationDate="$(echo $HibernationData | awk '{print $7" "$8" "$9}')"
     echo "Hibernation file: $HibernationLocation ($HibernationSize), changed ${HibernationDate}"
 fi
