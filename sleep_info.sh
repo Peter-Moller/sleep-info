@@ -183,10 +183,12 @@ WhyDidItFallAsleep()
     # Low Power            Sleep Battery critically low
     # Sleep Timer Expired  System-initiated sleep after a timer
 
-    PreviousSleepLine="$(echo "$SleepWakeHistory" | grep "Entering Sleep state due to" | tail -1)"
-    # 2025-05-30 17:39:28 +0200 Sleep                 Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:71%) 207 secs 
-    PreviousSleepCause="$(echo "$PreviousSleepLine" | cut -d\' -f2)"                   # Ex: PreviousSleepCause='Idle Sleep'
-    PreviousSleepTime="$(echo $PreviousSleepLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/; s/$(date -v-1d +%F)/yesterday at/")"        # Ex: PreviousSleepTime='2025-05-30 17:39:28'
+    if [ -n "$SleepWakeHistory" ]; then
+        PreviousSleepLine="$(echo "$SleepWakeHistory" | grep "Entering Sleep state due to" | tail -1)"
+        # 2025-05-30 17:39:28 +0200 Sleep                 Entering Sleep state due to 'Idle Sleep':TCPKeepAlive=active Using Batt (Charge:71%) 207 secs
+        PreviousSleepCause="$(echo "$PreviousSleepLine" | cut -d\' -f2)"                   # Ex: PreviousSleepCause='Idle Sleep'
+        PreviousSleepTime="$(echo $PreviousSleepLine | awk '{print $1" "$2}' | sed "s/$(date +%F)/today at/; s/$(date -v-1d +%F)/yesterday at/")"        # Ex: PreviousSleepTime='2025-05-30 17:39:28'
+    fi
 }
 
 # Find out why it did wake
@@ -400,7 +402,11 @@ echo "Last supported OS:  $LastSupportedOS"
 ################################################
 echo
 printf "${ESC}${BoldFace};${UnderlineFace}mRecent sleep/wake history${Reset}${ESC}${ItalicFace};${UnderlineFace}m (from 'pmset -g log'):${Reset}\n"
-echo "• Previous sleep cause: \"$PreviousSleepCause\" ($PreviousSleepTime)"
+if [ -n "$SleepWakeHistory" ]; then
+    echo "• Previous sleep cause: \"$PreviousSleepCause\" ($PreviousSleepTime)"
+else
+    echo "• No information about when the computer last went to sleep"
+fi
 if [ -n "$PreviousSleepLine" ]; then
     printf "• The computer woke up because of \"$WakeReason\" ${ESC}${ItalicFace}m($WakeReasonText)$Reset ($WakeTime)\n"
 else
