@@ -9,4 +9,5 @@ Important components:
 ---------------------
 
 The command `pmset` is used to gather information about sleep settings and also what prevents the computer form sleeping.  
-The command `ioreg` is used to gather battery health data.
+The command `ioreg` is used to gather battery health data.  
+The command `jq` is used to get the supported versions of macOS. If it isn’t installed, you will not get that information.
